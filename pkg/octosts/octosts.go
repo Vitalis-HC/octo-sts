@@ -136,15 +136,16 @@ type AppSet struct {
 type sts struct {
 	pboidc.UnimplementedSecurityTokenServiceServer
 
-	router               *ghinstall.OrgRouter
-	sticky               stickystore.Store
-	apps                 AppSet
-	ceclient             cloudevents.Client
-	domain               string
-	requireAuditDelivery bool
-	metrics              bool
-	baseURL              string
-	orgPolicyRepo        string
+	router                *ghinstall.OrgRouter
+	sticky                stickystore.Store
+	apps                  AppSet
+	ceclient              cloudevents.Client
+	domain                string
+	requireTrustedIssuers bool
+	requireAuditDelivery  bool
+	metrics               bool
+	baseURL               string
+	orgPolicyRepo         string
 	// policyDir is the directory, relative to the repository root, holding
 	// trust policies and the org trusted-issuer allowlist. Empty means
 	// DefaultPolicyDir.

@@ -64,9 +64,10 @@ type EnvConfig struct {
 }
 
 type EnvConfigApp struct {
-	RequireAuditDelivery bool   `envconfig:"OCTOSTS_REQUIRE_AUDIT_DELIVERY" default:"false"`
-	Domain               string `envconfig:"STS_DOMAIN" required:"true"`
-	EventingIngress      string `envconfig:"EVENT_INGRESS_URI" required:"false"`
+	RequireTrustedIssuers bool   `envconfig:"OCTOSTS_REQUIRE_TRUSTED_ISSUERS" default:"false"`
+	RequireAuditDelivery  bool   `envconfig:"OCTOSTS_REQUIRE_AUDIT_DELIVERY" default:"false"`
+	Domain                string `envconfig:"STS_DOMAIN" required:"true"`
+	EventingIngress       string `envconfig:"EVENT_INGRESS_URI" required:"false"`
 	// OrgPolicyRepo is the repository name (without owner) that holds
 	// org-scoped trust policies. It applies to every organization this
 	// instance serves. Defaults to ".github". Must not be empty; setting

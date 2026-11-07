@@ -108,7 +108,7 @@ func main() {
 		log.Panic(err)
 	}
 
-	pboidc.RegisterSecurityTokenServiceServer(d.Server, octosts.NewSecurityTokenServiceServer(router, sticky, apps, ceclient, appCfg.Domain, baseCfg.Metrics, baseCfg.GitHubBaseURL, appCfg.OrgPolicyRepo, appCfg.PolicyDir, baseCfg.AllowedIssuers, octosts.WithRequiredAuditDelivery(appCfg.RequireAuditDelivery)))
+	pboidc.RegisterSecurityTokenServiceServer(d.Server, octosts.NewSecurityTokenServiceServer(router, sticky, apps, ceclient, appCfg.Domain, baseCfg.Metrics, baseCfg.GitHubBaseURL, appCfg.OrgPolicyRepo, appCfg.PolicyDir, baseCfg.AllowedIssuers, octosts.WithRequiredAuditDelivery(appCfg.RequireAuditDelivery), octosts.WithRequiredTrustedIssuers(appCfg.RequireTrustedIssuers)))
 	if err := d.RegisterHandler(ctx, pboidc.RegisterSecurityTokenServiceHandlerFromEndpoint); err != nil {
 		log.Panicf("failed to register gateway endpoint: %v", err)
 	}
