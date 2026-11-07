@@ -522,3 +522,22 @@ func TestValidatePolicyDir(t *testing.T) {
 		})
 	}
 }
+
+func TestRequiredAuditDeliveryConfig(t *testing.T) {
+	t.Setenv("STS_DOMAIN", "fixture.invalid")
+	t.Setenv("OCTOSTS_REQUIRE_AUDIT_DELIVERY", "true")
+	t.Setenv("EVENT_INGRESS_URI", "")
+	if cfg, err := AppConfig(); err == nil || cfg != nil {
+		t.Fatal("required mode accepted missing sink")
+	}
+	t.Setenv("EVENT_INGRESS_URI", "http://127.0.0.1:1")
+	cfg, err := AppConfig()
+	if err != nil || !cfg.RequireAuditDelivery {
+		t.Fatal("required flag not configured")
+	}
+	t.Setenv("OCTOSTS_REQUIRE_AUDIT_DELIVERY", "false")
+	t.Setenv("EVENT_INGRESS_URI", "")
+	if _, err := AppConfig(); err != nil {
+		t.Fatal("default compatibility lost")
+	}
+}

@@ -64,8 +64,9 @@ type EnvConfig struct {
 }
 
 type EnvConfigApp struct {
-	Domain          string `envconfig:"STS_DOMAIN" required:"true"`
-	EventingIngress string `envconfig:"EVENT_INGRESS_URI" required:"false"`
+	RequireAuditDelivery bool   `envconfig:"OCTOSTS_REQUIRE_AUDIT_DELIVERY" default:"false"`
+	Domain               string `envconfig:"STS_DOMAIN" required:"true"`
+	EventingIngress      string `envconfig:"EVENT_INGRESS_URI" required:"false"`
 	// OrgPolicyRepo is the repository name (without owner) that holds
 	// org-scoped trust policies. It applies to every organization this
 	// instance serves. Defaults to ".github". Must not be empty; setting
@@ -105,6 +106,9 @@ func AppConfig() (*EnvConfigApp, error) {
 		return nil, err
 	}
 
+	if cfg.RequireAuditDelivery && cfg.EventingIngress == "" {
+		return nil, errors.New("OCTOSTS_REQUIRE_AUDIT_DELIVERY requires EVENT_INGRESS_URI")
+	}
 	if cfg.OrgPolicyRepo == "" {
 		return nil, errors.New("ORG_POLICY_REPO must not be empty")
 	}
