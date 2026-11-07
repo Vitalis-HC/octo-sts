@@ -1,0 +1,64 @@
+name: Fork image
+on:
+  pull_request:
+  push:
+    branches: [vitalis/v0.14.2]
+permissions: {}
+jobs:
+  build:
+    if: github.repository == 'Vitalis-HC/octo-sts'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install checksum-pinned Go and ko
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLo go.tgz https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
+          echo '63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445  go.tgz' | sha256sum -c -
+          tar -xzf go.tgz
+          curl -fsSLo ko.tgz https://github.com/ko-build/ko/releases/download/v0.19.1/ko_0.19.1_Linux_x86_64.tar.gz
+          echo '635ac6ea3fd376c935fee597fbb29ab2c2449f49ef1655085fe3aa9c25fed7a5  ko.tgz' | sha256sum -c -
+          mkdir ko-bin
+          tar -xzf ko.tgz -C ko-bin ko
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/ko-bin" >> "$GITHUB_PATH"
+      - name: Test affected packages without external test traffic
+        env:
+          HTTPS_PROXY: http://127.0.0.1:9
+          HTTP_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          NO_PROXY: 127.0.0.1,localhost,::1
+        run: go test -race ./pkg/octosts ./pkg/envconfig ./cmd/app
+      - name: Build twice and compare immutable OCI digests
+        run: .github/scripts/build-fork.sh "$RUNNER_TEMP/fork-image"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        id: upload
+        with:
+          name: fork-image
+          path: ${{ runner.temp }}/fork-image/image.tar
+          if-no-files-found: error
+  attest:
+    needs: build
+    if: github.event_name == 'push' && github.repository == 'Vitalis-HC/octo-sts' && github.ref == 'refs/heads/vitalis/v0.14.2'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact }}
+          path: image
+          merge-multiple: true
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2; repository policy must allow actions/attest@*
+        with:
+          subject-path: image/image.tar

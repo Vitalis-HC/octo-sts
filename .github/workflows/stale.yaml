@@ -12,6 +12,7 @@ permissions: {}
 
 jobs:
   stale:
+    if: github.repository == 'octo-sts/app'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
