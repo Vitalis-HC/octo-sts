@@ -30,8 +30,11 @@ jobs:
           tar -xzf ko.tgz -C ko-bin ko
           echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
           echo "$RUNNER_TEMP/ko-bin" >> "$GITHUB_PATH"
+      - name: Download checksum-verified Go modules
+        run: go mod download
       - name: Test affected packages without external test traffic
         env:
+          GOPROXY: 'off'
           HTTPS_PROXY: http://127.0.0.1:9
           HTTP_PROXY: http://127.0.0.1:9
           ALL_PROXY: http://127.0.0.1:9
