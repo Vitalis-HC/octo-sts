@@ -541,3 +541,14 @@ func TestRequiredAuditDeliveryConfig(t *testing.T) {
 		t.Fatal("default compatibility lost")
 	}
 }
+
+func TestRequiredTrustedIssuersConfig(t *testing.T) {
+	t.Setenv("STS_DOMAIN", "fixture.invalid")
+	for _, value := range []string{"false", "true"} {
+		t.Setenv("OCTOSTS_REQUIRE_TRUSTED_ISSUERS", value)
+		cfg, err := AppConfig()
+		if err != nil || cfg.RequireTrustedIssuers != (value == "true") {
+			t.Fatal("required issuer flag not configured")
+		}
+	}
+}

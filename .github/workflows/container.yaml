@@ -13,6 +13,7 @@ permissions: {}
 
 jobs:
   build:
+    if: github.repository == 'octo-sts/app'
     runs-on: ubuntu-latest
 
     strategy:

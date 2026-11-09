@@ -602,11 +602,21 @@ func (s *sts) settleOrgIssuerEntry(ctx context.Context, owner string, entry orgI
 	return entry
 }
 
+// WithRequiredTrustedIssuers refuses exchanges without an enforcing org issuer list.
+func WithRequiredTrustedIssuers(required bool) ServerOption {
+	return func(s *sts) { s.requireTrustedIssuers = required }
+}
+
+const msgRequiredIssuerList = "required trusted-token-issuers.yaml is unavailable or not enforcing"
+
 // checkOrgTrustedIssuers evaluates the org allowlist for owner, returning a decision
 // to record on the Event (nil when no allowlist applied or the issuer was permitted)
 // and a terminal error when the exchange must be denied.
 func (s *sts) checkOrgTrustedIssuers(ctx context.Context, owner, issuer string) (*IssuerDecision, error) {
 	entry, err := s.orgIssuerLookup(ctx, owner)
+	if s.requireTrustedIssuers && (err != nil || entry.state != orgIssuerPresent || entry.allow == nil || entry.allow.Mode() != ModeEnforce) {
+		return nil, status.Error(codes.FailedPrecondition, msgRequiredIssuerList)
+	}
 	if err != nil {
 		// Fail closed: an allowlist we could not establish is not allow-all.
 		return nil, err
