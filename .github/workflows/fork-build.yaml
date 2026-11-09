@@ -21,8 +21,8 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
-          curl -fsSLo go.tgz https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
-          echo '63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445  go.tgz' | sha256sum -c -
+          curl -fsSLo go.tgz https://go.dev/dl/go1.27.3.linux-amd64.tar.gz
+          echo '65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40  go.tgz' | sha256sum -c -
           tar -xzf go.tgz
           curl -fsSLo ko.tgz https://github.com/ko-build/ko/releases/download/v0.19.1/ko_0.19.1_Linux_x86_64.tar.gz
           echo '635ac6ea3fd376c935fee597fbb29ab2c2449f49ef1655085fe3aa9c25fed7a5  ko.tgz' | sha256sum -c -
