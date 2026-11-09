@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -102,17 +103,12 @@ func main() {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 
-	var ceclient cloudevents.Client
-	if baseCfg.Metrics && appCfg.EventingIngress != "" {
-		ceclient, err = mce.NewClientHTTP("octo-sts", mce.WithTarget(ctx, appCfg.EventingIngress)...)
-		if err != nil {
-			log.Panicf("failed to create cloudevents client: %v", err)
-		}
-	} else if baseCfg.Metrics {
-		clog.FromContext(ctx).Warn("EVENT_INGRESS_URI unset; exchange events will not be emitted")
+	ceclient, err := newEventClient(ctx, baseCfg.Metrics, appCfg)
+	if err != nil {
+		log.Panic(err)
 	}
 
-	pboidc.RegisterSecurityTokenServiceServer(d.Server, octosts.NewSecurityTokenServiceServer(router, sticky, apps, ceclient, appCfg.Domain, baseCfg.Metrics, baseCfg.GitHubBaseURL, appCfg.OrgPolicyRepo, appCfg.PolicyDir, baseCfg.AllowedIssuers))
+	pboidc.RegisterSecurityTokenServiceServer(d.Server, octosts.NewSecurityTokenServiceServer(router, sticky, apps, ceclient, appCfg.Domain, baseCfg.Metrics, baseCfg.GitHubBaseURL, appCfg.OrgPolicyRepo, appCfg.PolicyDir, baseCfg.AllowedIssuers, octosts.WithRequiredAuditDelivery(appCfg.RequireAuditDelivery)))
 	if err := d.RegisterHandler(ctx, pboidc.RegisterSecurityTokenServiceHandlerFromEndpoint); err != nil {
 		log.Panicf("failed to register gateway endpoint: %v", err)
 	}
@@ -246,4 +242,23 @@ func buildRouterFromEnv(ctx context.Context, baseCfg *envConfig.EnvConfig, quota
 	return ghinstall.NewOrgRouter(map[string]*ghinstall.OrgPool{
 		ghinstall.WildcardOrg: buildPool(managers, appIDs, quotaCfg),
 	}), len(managers), octosts.AppSet{IDs: appIDs}, closers, nil
+}
+
+// Eventing is independent of metrics when receipt delivery is required.
+func newEventClient(ctx context.Context, metrics bool, cfg *envConfig.EnvConfigApp) (cloudevents.Client, error) {
+	if !metrics && !cfg.RequireAuditDelivery {
+		return nil, nil
+	}
+	if cfg.EventingIngress == "" {
+		if cfg.RequireAuditDelivery {
+			return nil, errors.New("required audit delivery needs EVENT_INGRESS_URI")
+		}
+		clog.FromContext(ctx).Warn("EVENT_INGRESS_URI unset; exchange events will not be emitted")
+		return nil, nil
+	}
+	client, err := mce.NewClientHTTP("octo-sts", mce.WithTarget(ctx, cfg.EventingIngress)...)
+	if err != nil || client == nil {
+		return nil, errors.New("failed to create audit event client")
+	}
+	return client, nil
 }

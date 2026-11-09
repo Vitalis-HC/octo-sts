@@ -61,8 +61,8 @@ const (
 // GitHub installation tokens. router selects the per-org app pool; sticky (may
 // be nil) persists checks:write routing for check-run ownership across all
 // pools (installation IDs are globally unique within GitHub).
-func NewSecurityTokenServiceServer(router *ghinstall.OrgRouter, sticky stickystore.Store, apps AppSet, ceclient cloudevents.Client, domain string, metrics bool, baseURL string, orgPolicyRepo string, policyDir string, allowedIssuers []string) pboidc.SecurityTokenServiceServer {
-	return &sts{
+func NewSecurityTokenServiceServer(router *ghinstall.OrgRouter, sticky stickystore.Store, apps AppSet, ceclient cloudevents.Client, domain string, metrics bool, baseURL string, orgPolicyRepo string, policyDir string, allowedIssuers []string, options ...ServerOption) pboidc.SecurityTokenServiceServer {
+	s := &sts{
 		router:         router,
 		sticky:         sticky,
 		apps:           apps,
@@ -74,6 +74,10 @@ func NewSecurityTokenServiceServer(router *ghinstall.OrgRouter, sticky stickysto
 		policyDir:      policyDir,
 		allowedIssuers: allowedIssuers,
 	}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 var trustPolicies = expirablelru.NewLRU[cacheTrustPolicyKey, string](200, nil, time.Minute*5)
@@ -132,14 +136,15 @@ type AppSet struct {
 type sts struct {
 	pboidc.UnimplementedSecurityTokenServiceServer
 
-	router        *ghinstall.OrgRouter
-	sticky        stickystore.Store
-	apps          AppSet
-	ceclient      cloudevents.Client
-	domain        string
-	metrics       bool
-	baseURL       string
-	orgPolicyRepo string
+	router               *ghinstall.OrgRouter
+	sticky               stickystore.Store
+	apps                 AppSet
+	ceclient             cloudevents.Client
+	domain               string
+	requireAuditDelivery bool
+	metrics              bool
+	baseURL              string
+	orgPolicyRepo        string
 	// policyDir is the directory, relative to the repository root, holding
 	// trust policies and the org trusted-issuer allowlist. Empty means
 	// DefaultPolicyDir.
@@ -238,6 +243,9 @@ func (s *sts) Exchange(ctx context.Context, request *pboidc.ExchangeRequest) (_ 
 
 	if s.metrics && s.ceclient != nil {
 		defer func() {
+			if s.requireAuditDelivery && e.TokenSHA256 != "" {
+				return // Minted-token receipts use the mandatory path; denials stay telemetry.
+			}
 			event := cloudevents.NewEvent()
 			event.SetType("dev.octo-sts.exchange")
 			event.SetSubject(fmt.Sprintf("%s/%s", requestScope, request.GetIdentity()))
@@ -388,6 +396,9 @@ func (s *sts) Exchange(ctx context.Context, request *pboidc.ExchangeRequest) (_ 
 	// Compute the SHA256 hash of the token and store the hex-encoded value into e.TokenSHA256
 	hash := sha256.Sum256([]byte(token))
 	e.TokenSHA256 = hex.EncodeToString(hash[:])
+	if s.requireAuditDelivery {
+		return s.auditedToken(ctx, e, token)
+	}
 
 	return &pboidc.RawToken{
 		Token: token,
