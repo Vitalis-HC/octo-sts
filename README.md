@@ -56,6 +56,10 @@ The hosted service reaches GitHub from shared cloud IP addresses that change
 over time, so you cannot add them to an allow list. GitHub rejects its requests,
 and token exchanges fail with a 403 and
 `GitHub denied access to <org> (403): check the org's IP allow list, or whether the octo-sts installation is suspended`.
+This diagnostic also covers token minting for trust policy reads and the final
+exchange token when the organization trusted-issuer lookup is cached. Trust
+policy permission denials are cached for up to one minute to avoid repeated
+requests. Responses carrying rate-limit markers keep their existing handling.
 
 These organizations should self-host octo-sts with their own GitHub App and a
 static egress IP, then add that IP to the allow list. The Terraform module in
@@ -711,6 +715,46 @@ all; a deployment serving organizations that bring their own issuers, or one
 using `issuer_patterns`, will want to leave it unset and rely on the trust
 policy and the org-level allowlist instead.
 
+### Restricting OIDC egress (`OCTOSTS_OIDC_BLOCK_PRIVATE_IPS`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OCTOSTS_OIDC_BLOCK_PRIVATE_IPS` | `false` | Also refuse OIDC discovery and key fetches to private (RFC 1918, `fc00::/7`) and shared (`100.64.0.0/10`) addresses. |
+
+Because the caller chooses the issuer, and the issuer's discovery document
+chooses the `jwks_uri`, octo-sts checks every address it connects to for OIDC.
+These are always refused:
+
+- link-local addresses, including the cloud metadata service at `169.254.169.254`
+- other cloud metadata and host-agent addresses (`fd00:ec2::254`,
+  `100.100.100.200`, `168.63.129.16`)
+- loopback addresses, unless the issuer itself is a local `http://localhost`,
+  `http://127.0.0.1` or `http://[::1]` issuer
+- unspecified and multicast addresses
+- NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`) addresses that embed any of
+  the above
+
+A `jwks_uri` must also use `https`, unless both it and the issuer are local
+`http` addresses.
+
+Private addresses are allowed by default, because a self-hosted deployment may
+trust an issuer on one, such as an in-cluster Kubernetes issuer. If none of your
+issuers is on a private address, and in particular if your deployment can reach
+an internal network, set:
+
+```sh
+OCTOSTS_OIDC_BLOCK_PRIVATE_IPS=true
+```
+
+When an HTTP proxy is configured (`HTTPS_PROXY`), octo-sts can't see the
+address the proxy connects to. It resolves the target name itself and checks
+those addresses before handing the request to the proxy. A name that doesn't
+resolve from the octo-sts host is refused. The proxy's own address isn't
+checked, because you configured it, so a loopback sidecar proxy or one on a
+private address keeps working. The proxy resolves the name again,
+so a DNS answer that changes in between isn't caught. If you rely on a proxy,
+restrict its own egress as well.
+
 ### Best Practices
 
 To ensure secure and effective use of octo-sts, follow these recommended practices:
@@ -824,6 +868,7 @@ with your deployment for each organization's `octo-sts-cleanup` policy.
 | `ORG_POLICY_REPO` | `.github` | Must match the deployment's. |
 | `CLEANUP_IDENTITY` | `octo-sts-cleanup` | The opt-in policy's name, and the branch name after `octo-sts/`. |
 | `WINDOW` | `2160h` (90 days) | How far back an exchange counts as use. The exchange table must keep at least this much history; the job refuses to decide otherwise. |
+| `CONCURRENCY` | `8` | How many organizations are checked at once. Each check is one exchange for that organization, so this only changes how long a run takes. |
 | `DRY_RUN` | `true` | Only log what would be proposed. |
 
 The job only sees exchanges recorded by its own deployment. If two deployments

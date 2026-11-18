@@ -140,7 +140,7 @@ module "sts-emits-events" {
   for_each = var.regions
 
   source  = "chainguard-dev/common/infra//modules/authorize-private-service"
-  version = "1.84.1"
+  version = "1.87.0"
 
   project_id = var.project_id
   region     = each.key
@@ -151,7 +151,7 @@ module "sts-emits-events" {
 
 module "this" {
   source  = "chainguard-dev/common/infra//modules/regional-service"
-  version = "1.84.1"
+  version = "1.87.0"
 
   team = "developer-platform"
 
@@ -185,7 +185,12 @@ module "this" {
           name  = "KMS_KEYS"
           value = join(",", local.kms_keys)
         },
-      ], local.common_env)
+        ], local.common_env, [
+        {
+          name  = "OCTOSTS_OIDC_BLOCK_PRIVATE_IPS"
+          value = tostring(var.oidc_block_private_ips)
+        },
+      ])
       regional-env = [{
         name  = "EVENT_INGRESS_URI"
         value = { for k, v in module.sts-emits-events : k => v.uri }

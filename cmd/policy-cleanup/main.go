@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -32,6 +33,7 @@ import (
 	"github.com/google/go-github/v88/github"
 	"github.com/kelseyhightower/envconfig"
 	"golang.org/x/oauth2"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/idtoken"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -58,9 +60,16 @@ type config struct {
 	OrgPolicyRepo string        `envconfig:"ORG_POLICY_REPO" default:".github"`
 	PolicyDir     string        `envconfig:"OCTOSTS_POLICY_DIR" default:".github/chainguard"`
 	Window        time.Duration `envconfig:"WINDOW" default:"2160h"`
+	// Concurrency is how many organizations are checked at once.
+	Concurrency int `envconfig:"CONCURRENCY" default:"8"`
 	// DryRun only logs the decisions. It is on unless turned off.
 	DryRun bool `envconfig:"DRY_RUN" default:"true"`
 }
+
+// accountName matches a GitHub account name: letters, digits and hyphens,
+// starting with a letter or digit. Underscores are allowed too, since
+// Enterprise Managed User logins end in "_shortcode".
+var accountName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$`)
 
 // deps are the job's dependencies on the outside world.
 type deps struct {
@@ -144,6 +153,9 @@ func run(ctx context.Context, cfg config, d deps) error {
 	if cfg.Window <= 0 {
 		return fmt.Errorf("WINDOW must be positive, got %s", cfg.Window)
 	}
+	if cfg.Concurrency < 1 {
+		return fmt.Errorf("CONCURRENCY must be at least 1, got %d", cfg.Concurrency)
+	}
 	now := d.now()
 	since := now.Add(-cfg.Window)
 	h, err := d.load(ctx, since, now)
@@ -157,19 +169,45 @@ func run(ctx context.Context, cfg config, d deps) error {
 			cleanup.ErrHistoryTooShort, h.Start.Format(time.RFC3339), h.Latest.Format(time.RFC3339), since.Format(time.RFC3339))
 	}
 
-	orgs := h.Orgs()
+	// Recorded scopes are whatever callers sent, including unfilled
+	// placeholders like "$org" or "<owner>", and "/.github", whose org is
+	// empty and fails the exchange outright. Only names that can be a GitHub
+	// account are worth an exchange.
+	orgs := slices.DeleteFunc(h.Orgs(), func(org string) bool { return !accountName.MatchString(org) })
 	slices.Sort(orgs)
-	clog.InfoContextf(ctx, "checking %d organizations, history from %s, dry run %t", len(orgs), h.Start.Format(time.RFC3339), cfg.DryRun)
+	clog.InfoContextf(ctx, "checking %d organizations (%d other recorded scopes skipped), history from %s, dry run %t",
+		len(orgs), len(h.Usage)-len(orgs), h.Start.Format(time.RFC3339), cfg.DryRun)
+
+	// Each org is a slow exchange, mostly octo-sts finding which App is
+	// installed there, so check a few at once. Each org still sees one
+	// exchange; results keep the orgs' order.
+	type result struct {
+		optedIn bool
+		err     error
+	}
+	results := make([]result, len(orgs))
+	var g errgroup.Group
+	g.SetLimit(cfg.Concurrency)
+	for i, org := range orgs {
+		g.Go(func() error {
+			ok, err := cleanOrg(ctx, cfg, d, h, org, now)
+			if err != nil {
+				err = fmt.Errorf("%s: %w", org, err)
+			}
+			results[i] = result{optedIn: ok, err: err}
+			return nil
+		})
+	}
+	_ = g.Wait() // Every goroutine returns nil; failures are in results.
 
 	var errs []error
 	optedIn := 0
-	for _, org := range orgs {
-		ok, err := cleanOrg(ctx, cfg, d, h, org, now)
-		if ok {
+	for _, r := range results {
+		if r.optedIn {
 			optedIn++
 		}
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", org, err))
+		if r.err != nil {
+			errs = append(errs, r.err)
 		}
 	}
 	clog.InfoContextf(ctx, "%d of %d organizations opted in, %d failed", optedIn, len(orgs), len(errs))
