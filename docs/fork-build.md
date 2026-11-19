@@ -22,8 +22,14 @@ push has a separate attestation job that downloads the immutable artifact and
 attests its archive without checking out or executing source. Verify the signer,
 source ref/commit, archive and contained OCI digest before deploying by digest.
 Unsigned local metadata or a successful PR build does not prove signed provenance.
-The workflow does not choose a registry or publish an image. Repository policy
-must permit its SHA-pinned actions, including actions/attest, before native use.
+A promote job then makes those checks itself, again without source, and pushes
+the image to the `agent-tools` registry tagged with its commit, digest unchanged.
+Google accepts only this workflow on a `vitalis/main` push, through the trust and
+push-only account in quality's `infra/agent-broker/promoter.tf`; set that root's
+`octo_sts_release_variables` output as this repository's Actions variables, and
+until then the job is skipped. It never deploys: the broker runs a digest only
+after a reviewed apply. Repository policy must permit the workflow's SHA-pinned
+actions, including actions/attest, before native use.
 
 Upstream container publishing and stale mutations are guarded to octo-sts/app;
 reusable deployment was already upstream-only. Other inherited main-only workflows
