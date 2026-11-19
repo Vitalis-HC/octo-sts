@@ -2,7 +2,7 @@ name: Fork image
 on:
   pull_request:
   push:
-    branches: [vitalis/v0.14.2]
+    branches: [vitalis/main]
 permissions: {}
 jobs:
   build:
@@ -50,7 +50,7 @@ jobs:
           if-no-files-found: error
   attest:
     needs: build
-    if: github.event_name == 'push' && github.repository == 'Vitalis-HC/octo-sts' && github.ref == 'refs/heads/vitalis/v0.14.2'
+    if: github.event_name == 'push' && github.repository == 'Vitalis-HC/octo-sts' && github.ref == 'refs/heads/vitalis/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: read

@@ -1,8 +1,10 @@
 # Reproducible fork image
 
-The release line `vitalis/v0.14.2` starts at upstream commit
+The release line `vitalis/main` starts at upstream commit
 270e72e2ac2b1f6830c3d15987697d37bd5d65c4 (upstream v0.14.2) and has since merged
-upstream release v0.14.3. It takes upstream releases, not upstream main.
+upstream release v0.14.3. It takes upstream releases, not upstream main. It was
+previously named `vitalis/v0.14.2`; images built under that name attest
+`refs/heads/vitalis/v0.14.2` as their source ref.
 Maintainers choose the default branch and protect the release line before use.
 
 With Go1.27.3 and ko0.19.1 on PATH, from a clean checkout, run:

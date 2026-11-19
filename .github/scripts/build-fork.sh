@@ -13,6 +13,7 @@ export SOURCE_DATE_EPOCH
 SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
 export KO_DOCKER_REPO=example.invalid/octo-sts
 export GOTOOLCHAIN=local CGO_ENABLED=0
+export TZ=UTC # ko writes the image creation time in the local timezone.
 unset GOOS GOARCH KO_DEFAULTPLATFORMS # --platform is the single platform selector.
 # Do not read a user's registry credentials, even for the public base pull.
 export DOCKER_CONFIG="$out/empty-docker-config"
