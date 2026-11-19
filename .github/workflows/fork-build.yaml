@@ -99,6 +99,8 @@ jobs:
           digest=$(jq -r .image_digest oci/provenance.json)
           [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]]
           [[ $(jq -c '[.manifests[].digest]' oci/image/index.json) == "[\"$digest\"]" ]]
+          # The registry names a manifest by the hash of its bytes, so check the bytes, not only the declared digest.
+          [[ $(sha256sum < "oci/image/blobs/sha256/${digest#sha256:}") == "${digest#sha256:}  -" ]]
 
           cd "$RUNNER_TEMP"
           curl -fsSLo crane.tgz https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz
