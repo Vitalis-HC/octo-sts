@@ -27,8 +27,11 @@ the image to the `agent-tools` registry tagged with its commit, digest unchanged
 Google accepts only this workflow on a `vitalis/main` push, through the trust and
 push-only account in quality's `infra/agent-broker/promoter.tf`; set that root's
 `octo_sts_release_variables` output as this repository's Actions variables, and
-until then the job is skipped. It never deploys: the broker runs a digest only
-after a reviewed apply. Repository policy must permit the workflow's SHA-pinned
+until then the job is skipped. Use repository variables (Settings → Secrets and
+variables → Actions → Variables), not secrets or environment variables: the job
+reads `vars` and has no environment. Re-running an earlier run does not pick up
+newly set variables; the next push to `vitalis/main` does. It never deploys: the
+broker runs a digest only after a reviewed apply. Repository policy must permit the workflow's SHA-pinned
 actions, including actions/attest, before native use.
 
 Upstream container publishing and stale mutations are guarded to octo-sts/app;
